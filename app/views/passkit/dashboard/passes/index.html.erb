@@ -15,7 +15,13 @@
       <% @passes.each do |pass| %>
         <tr>
           <td><%= I18n.l(pass.created_at) %></td>
-          <td><%= pass.generator.class.name %> - <%= pass.generator.id %></td>
+          <td>
+            <% if pass.generator %>
+              <%= pass.generator.class.name %> - <%= pass.generator.id %>
+            <% else %>
+              No generator
+            <% end %>
+          </td>
           <td><%= pass.klass %></td>
           <td>
             <% pass.devices.each do |device| %>
