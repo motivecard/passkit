@@ -21,6 +21,23 @@ module Passkit
 
         Passkit::Generator.new(pass).generate_and_sign
       end
+
+      def update_pass(pass)
+        generator = pass.generator
+        pass.update!(
+          data: generate_pass_data(generator)
+        )
+        Passkit::Generator.new(pass).generate_and_sign
+      end
+
+      private
+
+      def generate_pass_data(generator)
+        {
+          balance: generator.balance,
+          visit_tracker: generator.visit_tracker,
+        }
+      end
     end
   end
 end
