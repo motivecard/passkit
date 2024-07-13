@@ -20,6 +20,8 @@ module Passkit
         http = Net::HTTP.new(uri.host, uri.port)
         http.use_ssl = true
         http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+        http.open_timeout = 15  # tiempo de espera para abrir la conexión
+        http.read_timeout = 15  # tiempo de espera para leer la respuesta
 
         begin
           p12 = OpenSSL::PKCS12.new(File.read(Passkit.configuration.private_p12_certificate), Passkit.configuration.certificate_key)
