@@ -49,9 +49,6 @@ module Passkit
       @apple_intermediate_certificate = ENV["PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE"] || (raise "Please set PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE")
       @apple_team_identifier = ENV["PASSKIT_APPLE_TEAM_IDENTIFIER"] || (raise "Please set PASSKIT_APPLE_TEAM_IDENTIFIER")
       @pass_type_identifier = ENV["PASSKIT_PASS_TYPE_IDENTIFIER"] || (raise "Please set PASSKIT_PASS_TYPE_IDENTIFIER")
-      @apn_certificate_path = ENV["PASSKIT_APN_CERTIFICATE_PATH"] || (raise "Please set PASSKIT_APN_CERTIFICATE_PATH")
-      @apn_certificate_passphrase = ENV["PASSKIT_APN_CERTIFICATE_PASSPHRASE"] || (raise "Please set PASSKIT_APN_CERTIFICATE_PASSPHRASE")
-      @apn_environment = ENV["PASSKIT_APN_ENVIRONMENT"] || "production"
     end
   end
 end

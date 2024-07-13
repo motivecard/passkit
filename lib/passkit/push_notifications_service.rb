@@ -21,9 +21,9 @@ module Passkit
         http.use_ssl = true
         http.verify_mode = OpenSSL::SSL::VERIFY_PEER
 
-        # Cargar el certificado
-        http.cert = OpenSSL::X509::Certificate.new(File.read(Passkit.configuration.apn_certificate_path))
-        http.key = OpenSSL::PKey::RSA.new(File.read(Passkit.configuration.apn_certificate_path), Passkit.configuration.apn_certificate_passphrase)
+        # Usar el certificado existente
+        http.cert = OpenSSL::X509::Certificate.new(File.read(Passkit.configuration.private_p12_certificate))
+        http.key = OpenSSL::PKey::RSA.new(File.read(Passkit.configuration.private_p12_certificate), Passkit.configuration.certificate_key)
 
         request = Net::HTTP::Post.new(uri.request_uri)
         request['apns-topic'] = pass_type_identifier
@@ -58,7 +58,7 @@ module Passkit
       private
 
       def apple_gateway
-        Passkit.configuration.apn_environment == 'production' ? APPLE_PRODUCTION_GATEWAY : APPLE_DEVELOPMENT_GATEWAY
+        Rails.env.production? ? APPLE_PRODUCTION_GATEWAY : APPLE_DEVELOPMENT_GATEWAY
       end
     end
   end
