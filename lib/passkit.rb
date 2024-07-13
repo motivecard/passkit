@@ -14,6 +14,11 @@ module Passkit
 
   class << self
     attr_accessor :configuration
+    attr_writer :logger
+
+    def logger
+      @logger ||= Logger.new(STDOUT)
+    end
   end
 
   def self.configure
