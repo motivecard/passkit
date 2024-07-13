@@ -10,7 +10,8 @@ module Passkit
 
     class << self
       def notify_pass_update(pass)
-        pass.devices.each do |device|
+        devices = Passkit::Device.where(passkit_pass_id: pass.id)
+        devices.each do |device|
           send_push_notification(device.push_token, pass.pass_type_identifier)
         end
       end
