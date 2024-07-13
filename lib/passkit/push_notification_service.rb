@@ -87,7 +87,7 @@ module Passkit
       private
 
       def apple_gateway
-        Passkit.env.production? ? APPLE_PRODUCTION_GATEWAY : APPLE_DEVELOPMENT_GATEWAY
+        Rails.env.production? ? APPLE_PRODUCTION_GATEWAY : APPLE_DEVELOPMENT_GATEWAY
       end
     end
   end
