@@ -35,11 +35,8 @@ module Passkit
             return
           end
 
-          pass_output_path = Passkit::Generator.new(pass).generate_and_sign
-
-          response.headers["last-modified"] = pass.last_update.httpdate
-          if request.headers["If-Modified-Since"].nil? ||
-              (pass.last_update.to_i > Time.zone.parse(request.headers["If-Modified-Since"]).to_i)
+          if stale?(last_modified: pass.last_update, etag: pass.cache_key_with_version)
+            pass_output_path = Passkit::Generator.new(pass).generate_and_sign
             send_file(pass_output_path, type: "application/vnd.apple.pkpass", disposition: "attachment")
           else
             head :not_modified
