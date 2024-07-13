@@ -21,15 +21,24 @@ module Passkit
         http.use_ssl = true
         http.verify_mode = OpenSSL::SSL::VERIFY_PEER
 
-        # Usar el certificado existente
-        http.cert = OpenSSL::X509::Certificate.new(File.read(Passkit.configuration.private_p12_certificate))
-        http.key = OpenSSL::PKey::RSA.new(File.read(Passkit.configuration.private_p12_certificate), Passkit.configuration.certificate_key)
+        begin
+          cert_file = File.read(Passkit.configuration.private_p12_certificate)
+          cert = OpenSSL::X509::Certificate.new(cert_file)
+          key = OpenSSL::PKey::RSA.new(cert_file, Passkit.configuration.certificate_key)
+          
+          http.cert = cert
+          http.key = key
+        rescue => e
+          Rails.logger.error "Error loading certificate: #{e.message}"
+          Rails.logger.error "Error backtrace: #{e.backtrace.join("\n")}"
+          Rails.logger.error "Certificate path: #{Passkit.configuration.private_p12_certificate}"
+          return nil
+        end
 
         request = Net::HTTP::Post.new(uri.request_uri)
         request['apns-topic'] = pass_type_identifier
         request['apns-push-type'] = 'alert'
 
-        # Payload de la notificación
         payload = {
           aps: {
             alert: 'Your pass has been updated!',
@@ -52,7 +61,23 @@ module Passkit
         response
       rescue => e
         Rails.logger.error "Error sending push notification: #{e.message}"
+        Rails.logger.error "Error backtrace: #{e.backtrace.join("\n")}"
         nil
+      end
+
+      def test_certificate
+        cert_file = File.read(Passkit.configuration.private_p12_certificate)
+        cert = OpenSSL::X509::Certificate.new(cert_file)
+        key = OpenSSL::PKey::RSA.new(cert_file, Passkit.configuration.certificate_key)
+        
+        Rails.logger.info "Certificate loaded successfully"
+        Rails.logger.info "Certificate subject: #{cert.subject}"
+        Rails.logger.info "Certificate issuer: #{cert.issuer}"
+        Rails.logger.info "Certificate valid from: #{cert.not_before}"
+        Rails.logger.info "Certificate valid to: #{cert.not_after}"
+      rescue => e
+        Rails.logger.error "Error loading certificate: #{e.message}"
+        Rails.logger.error "Error backtrace: #{e.backtrace.join("\n")}"
       end
 
       private
