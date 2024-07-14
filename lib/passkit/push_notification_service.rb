@@ -17,37 +17,39 @@ module Passkit
       end
 
       def send_push_notification(push_token, pass_type_identifier)
-        Rails.logger.info "Sending push notification to token: #{push_token}"
-        uri = URI.parse("#{apple_gateway}/3/device/#{push_token}")
-        http = Net::HTTP.new(uri.host, uri.port)
-        http.use_ssl = true
-        http.verify_mode = OpenSSL::SSL::VERIFY_PEER
-        http.open_timeout = 30  # Aumentado a 30 segundos
-        http.read_timeout = 30  # Aumentado a 30 segundos
-
+        retries = 3
         begin
+          Rails.logger.info "Initiating push notification to token: #{push_token}"
+          uri = URI.parse("#{apple_gateway}/3/device/#{push_token}")
+          http = Net::HTTP.new(uri.host, uri.port)
+          http.use_ssl = true
+          http.verify_mode = OpenSSL::SSL::VERIFY_PEER
+          http.open_timeout = 60
+          http.read_timeout = 60
+      
           load_certificate(http)
-        rescue => e
-          Rails.logger.error "Failed to load certificate: #{e.message}"
-          return nil
-        end
-
-        request = create_request(uri, pass_type_identifier)
-
-        begin
-          Rails.logger.info "Sending request to Apple Push Notification Service"
+      
+          request = create_request(uri, pass_type_identifier)
+      
+          Rails.logger.info "Sending request to APNS"
           response = http.request(request)
+          Rails.logger.info "Received response from APNS: #{response.code} #{response.message}"
+      
           handle_response(response, push_token)
-        rescue Net::OpenTimeout, Net::ReadTimeout => e
-          Rails.logger.error "Timeout error sending push notification: #{e.message}"
-          nil
-        rescue SocketError => e
-          Rails.logger.error "Socket error sending push notification: #{e.message}"
-          nil
+        rescue EOFError => e
+          Rails.logger.error "EOFError encountered: #{e.message}"
+          retries -= 1
+          if retries > 0
+            Rails.logger.info "Retrying push notification. Attempts left: #{retries}"
+            sleep 1
+            retry
+          else
+            Rails.logger.error "Failed to send push notification after 3 attempts"
+            raise
+          end
         rescue => e
-          Rails.logger.error "Error sending push notification: #{e.message}"
-          Rails.logger.error "Error class: #{e.class}"
-          Rails.logger.error "Error backtrace: #{e.backtrace.join("\n")}"
+          Rails.logger.error "Unexpected error sending push notification: #{e.class} - #{e.message}"
+          Rails.logger.error e.backtrace.join("\n")
           nil
         end
       end
