@@ -76,7 +76,7 @@ module Passkit
       private
 
       def apple_gateway
-        Rails.env.production? ? APPLE_PRODUCTION_GATEWAY : APPLE_DEVELOPMENT_GATEWAY
+        APPLE_PRODUCTION_GATEWAY
       end
 
       def load_certificate(http)
