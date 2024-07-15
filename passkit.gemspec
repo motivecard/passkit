@@ -41,6 +41,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "selenium-webdriver"
   spec.add_development_dependency "webrick"
   spec.add_development_dependency "standard", "~> 1.9"
+  spec.add_dependency 'apnotic'
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
