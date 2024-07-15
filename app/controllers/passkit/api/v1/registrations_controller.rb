@@ -6,12 +6,11 @@ module Passkit
         before_action :load_device, only: %i[show]
 
         def create
-          if @pass.devices.exists?(identifier: params[:device_id])
-            render json: {}, status: :ok
-          else
-            register_device
-            render json: {}, status: :created
+          device = Passkit::Device.find_or_create_by!(identifier: params[:device_id]) do |d|
+            d.push_token = push_token
           end
+          @pass.registrations.find_or_create_by!(device: device)
+          render json: {}, status: :created
         end
 
         def show
@@ -70,14 +69,14 @@ module Passkit
         def fetch_registered_passes
           passes = @device.passes
           if params[:passesUpdatedSince].present?
-            passes = passes.where('updated_at > ?', Time.zone.parse(params[:passesUpdatedSince]))
+            passes = passes.where('passkit_passes.updated_at > ?', Time.zone.parse(params[:passesUpdatedSince]))
           end
           passes
         end
 
         def updatable_passes(passes)
           {
-            lastUpdated: passes.maximum(:updated_at).iso8601,
+            lastUpdated: passes.maximum('passkit_passes.updated_at').iso8601,
             serialNumbers: passes.pluck(:serial_number)
           }
         end
