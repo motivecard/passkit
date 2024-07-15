@@ -7,8 +7,15 @@ module Passkit
         Rails.logger.info "Notifying pass update for pass: #{pass.id}"
         connection = create_connection
         pass.devices.each do |device|
-          send_push_notification(connection, device.push_token, pass.pass_type_identifier)
+          if device.push_token.present?
+            send_push_notification(connection, device.push_token, pass.pass_type_identifier)
+          else
+            Rails.logger.warn "Device #{device.id} for pass #{pass.id} has no push token"
+          end
         end
+      rescue => e
+        Rails.logger.error "Error in notify_pass_update: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
       ensure
         connection&.close
       end
@@ -16,19 +23,28 @@ module Passkit
       private
 
       def create_connection
+        Rails.logger.info "Creating APNS connection with cert: #{Passkit.configuration.private_p12_certificate}"
         Apnotic::Connection.new(
           cert_path: Passkit.configuration.private_p12_certificate,
           cert_pass: Passkit.configuration.certificate_key
         )
+      rescue => e
+        Rails.logger.error "Failed to create APNS connection: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
+        raise
       end
 
       def send_push_notification(connection, push_token, pass_type_identifier)
         notification = create_notification(push_token, pass_type_identifier)
         
-        Rails.logger.info "Sending push notification to APNS"
+        Rails.logger.info "Sending push notification to APNS for token: #{push_token}"
         response = connection.push(notification)
         
         handle_response(response, push_token)
+      rescue => e
+        Rails.logger.error "Error sending push notification: #{e.message}"
+        Rails.logger.error e.backtrace.join("\n")
+        raise
       end
 
       def create_notification(push_token, pass_type_identifier)
@@ -36,6 +52,7 @@ module Passkit
         notification.topic = pass_type_identifier
         notification.push_type = 'background'
         notification.content_available = 1
+        Rails.logger.info "Created notification: #{notification.inspect}"
         notification
       end
 
