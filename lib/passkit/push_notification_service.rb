@@ -50,7 +50,11 @@ module Passkit
       def create_notification(push_token, pass_type_identifier)
         notification = Apnotic::Notification.new(push_token)
         notification.topic = pass_type_identifier
-        notification.push_type = 'background'
+        notification.push_type = 'alert'  # Cambia a 'alert' si quieres una notificación visible
+        notification.alert = {
+          title: "Actualización de pase",
+          body: "Tu pase ha sido actualizado. Abre Wallet para ver los cambios."
+        }
         notification.content_available = 1
         Rails.logger.info "Created notification: #{notification.inspect}"
         notification
