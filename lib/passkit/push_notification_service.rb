@@ -33,7 +33,7 @@ module Passkit
       notification = Apnotic::Notification.new(push_token)
       notification.topic = pass_type_identifier
       notification.push_type = 'background'
-      notification.payload = { aps: { 'content-available': 1 } }
+      notification.custom_payload = { aps: { 'content-available': 1 } }
       notification
     end
 
