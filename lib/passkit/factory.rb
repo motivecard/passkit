@@ -1,7 +1,6 @@
 module Passkit
   class Factory
     class << self
-      # generator is an optional ActiveRecord object, the application data for the pass
       def create_pass(pass_class, generator = nil)
         pass = if generator
                 Passkit::Pass.find_or_create_by!(
@@ -13,7 +12,6 @@ module Passkit
                 Passkit::Pass.find_or_create_by!(klass: pass_class)
               end
 
-        # Actualiza los datos del pase si es necesario
         pass.update!(
           serial_number: pass.serial_number || SecureRandom.uuid,
           authentication_token: pass.authentication_token || SecureRandom.hex
@@ -24,8 +22,10 @@ module Passkit
 
       def update_pass(pass)
         generator = pass.generator
+        pass_data = generate_pass_data(generator)
         pass.update!(
-          data: generate_pass_data(generator)
+          data: pass_data,
+          last_updated: Time.current
         )
         Passkit::Generator.new(pass).generate_and_sign
       end
@@ -36,6 +36,7 @@ module Passkit
         {
           balance: generator.balance,
           visit_tracker: generator.visit_tracker,
+          lastUpdated: Time.current.iso8601
         }
       end
     end
