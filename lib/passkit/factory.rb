@@ -25,6 +25,8 @@ module Passkit
       def update_pass(pass)
         generator = pass.generator
         pass.update!(
+          serial_number: pass.serial_number || SecureRandom.uuid,
+          authentication_token: pass.authentication_token || SecureRandom.hex,
           data: generate_pass_data(generator)
         )
         Passkit::Generator.new(pass).generate_and_sign
