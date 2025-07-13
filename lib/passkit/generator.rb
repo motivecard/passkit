@@ -76,6 +76,9 @@ module Passkit
         voided: @pass.voided,
         webServiceURL: @pass.web_service_url
       }
+      
+      # Añadir lastUpdated solo si existe un valor válido
+      pass[:lastUpdated] = @pass.last_update.iso8601 if @pass.last_update
 
       pass[:maxDistance] = @pass.max_distance if @pass.max_distance
 
