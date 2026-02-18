@@ -27,7 +27,7 @@ module Passkit
         pass.update!(
           serial_number: pass.serial_number || SecureRandom.uuid,
           authentication_token: pass.authentication_token || SecureRandom.hex,
-          data: generate_pass_data(generator),
+          data: (pass.data || {}).merge(generate_pass_data(generator)),
           updated_at: Time.current # Forzar actualización del timestamp
         )
         Passkit::Generator.new(pass).generate_and_sign
