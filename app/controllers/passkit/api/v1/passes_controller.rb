@@ -38,8 +38,6 @@ module Passkit
           if stale?(last_modified: pass.last_update, etag: pass.cache_key_with_version)
             pass_output_path = Passkit::Generator.new(pass).generate_and_sign
             send_file(pass_output_path, type: "application/vnd.apple.pkpass", disposition: "attachment")
-          else
-            head :not_modified
           end
         end
 
