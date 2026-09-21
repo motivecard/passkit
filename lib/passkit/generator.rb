@@ -111,6 +111,9 @@ module Passkit
 
       pass[:boardingPass].merge(@pass.boarding_pass) if @pass.pass_type == :boardingPass && @pass.boarding_pass
 
+      additional_pass_data = @pass.additional_pass_data
+      pass.deep_merge!(additional_pass_data) if additional_pass_data.present?
+
       File.write(@temporary_path.join("pass.json"), pass.to_json)
     end
 

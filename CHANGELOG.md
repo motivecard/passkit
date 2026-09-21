@@ -1,3 +1,6 @@
+## [0.7.1]
+- `additional_pass_data`: pass.json keys the gem doesn't model (an extra style dictionary such as `posterGeneric`, `relevantDates`, `featuredActions`), deep merged last. Empty by default, so existing passes are unchanged.
+
 ## [0.7.0]
 - [#25](https://github.com/coorasse/passkit/pull/25): Change the label default color to black.
 

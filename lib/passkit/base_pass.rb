@@ -179,6 +179,14 @@ module Passkit
     def user_info
     end
 
+    # pass.json keys this gem doesn't model, deep merged last: an extra style
+    # dictionary next to pass_type (e.g. posterGeneric, which iOS 27 prefers while
+    # older versions keep rendering pass_type), relevantDates, featuredActions...
+    # Returns a Hash
+    def additional_pass_data
+      {}
+    end
+
     def file_name
       @file_name ||= SecureRandom.uuid
     end
