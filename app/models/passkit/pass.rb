@@ -7,7 +7,8 @@ module Passkit
     has_many :registrations, foreign_key: :passkit_pass_id
     has_many :devices, through: :registrations
 
-    delegate :apple_team_identifier,
+    delegate :additional_pass_data,
+      :apple_team_identifier,
       :app_launch_url,
       :associated_store_identifiers,
       :auxiliary_fields,

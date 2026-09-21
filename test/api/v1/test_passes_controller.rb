@@ -18,6 +18,19 @@ class TestPassesController < ActionDispatch::IntegrationTest
     assert_equal 7, zip_file.size
   end
 
+  def test_create_without_additional_pass_data_keeps_a_single_style
+    pass_json = pass_json_for(Passkit::ExampleStoreCard)
+    assert pass_json.key?("storeCard")
+    refute pass_json.key?("posterGeneric")
+  end
+
+  def test_create_with_additional_pass_data_adds_the_style_next_to_pass_type
+    pass_json = pass_json_for(Passkit::ExamplePosterCard)
+    assert_equal ["headerFields", "primaryFields", "secondaryFields", "auxiliaryFields", "backFields"], pass_json["storeCard"].keys
+    assert_equal "Alessandro", pass_json.dig("posterGeneric", "primaryFields", 0, "value")
+    assert_equal "Gold", pass_json.dig("posterGeneric", "footerFields", 0, "value")
+  end
+
   def test_create_collection
     payload = Passkit::PayloadGenerator.encrypted(Passkit::UserTicket, User.find(1), :tickets)
     get passes_api_path(payload)
@@ -47,5 +60,14 @@ class TestPassesController < ActionDispatch::IntegrationTest
     assert_equal "", response.body
     assert_equal pass.last_update.httpdate, response.headers["Last-Modified"]
     assert_response :not_modified
+  end
+
+  private
+
+  def pass_json_for(pass_class)
+    get passes_api_path(Passkit::PayloadGenerator.encrypted(pass_class))
+    assert_response :success
+    zip_file = Zip::File.open_buffer(StringIO.new(response.body))
+    JSON.parse(zip_file.read("pass.json"))
   end
 end
