@@ -74,9 +74,13 @@ module Passkit
           passes
         end
 
+        # The tag comes back as passesUpdatedSince and is compared with `>`: truncated to
+        # seconds, a pass updated at 12:00:00.6 was newer than its own tag (12:00:00) and was
+        # listed again on every check, so the device re-downloaded an unchanged pass and
+        # logged "lastUpdated tag remained the same". Apple treats the tag as opaque.
         def updatable_passes(passes)
           {
-            lastUpdated: passes.maximum('passkit_passes.updated_at').iso8601,
+            lastUpdated: passes.maximum('passkit_passes.updated_at').iso8601(6),
             serialNumbers: passes.pluck(:serial_number)
           }
         end

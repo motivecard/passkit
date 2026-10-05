@@ -1,6 +1,7 @@
 ## [0.7.2]
 - APNs: `PushNotificationService` keeps a per-process pool of persistent connections (`Apnotic::ConnectionPool`) instead of opening one per notification. New settings: `apns_pool_size` (default 5) and `push_error_handler` (called with socket errors). `reset_connection_pool!` closes them, e.g. after rotating the certificate.
 - `PassesController#show` and `#create` delete the generated `.pkpass` and its build folder after responding; they used to stay in `tmp/passkit` forever. New `Passkit::Generator.cleanup(path)`.
+- `RegistrationsController#show` returns `lastUpdated` with microseconds. Truncated to seconds, the latest pass was newer than its own tag and was listed again on every "what changed?" check: the device re-downloaded an unchanged pass and logged "lastUpdated tag remained the same". Second-precision tags already on devices keep working.
 
 ## [0.7.1]
 - `additional_pass_data`: pass.json keys the gem doesn't model (an extra style dictionary such as `posterGeneric`, `relevantDates`, `featuredActions`), deep merged last. Empty by default, so existing passes are unchanged.
