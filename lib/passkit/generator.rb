@@ -23,6 +23,15 @@ module Passkit
       compress_pass_file
     end
 
+    # Deletes a generated .pkpass/.pkpasses and the build folder next to it
+    # (same name without the extension). The files only live for one response.
+    def self.cleanup(path)
+      return if path.blank?
+
+      FileUtils.rm_f(path)
+      FileUtils.rm_rf(path.to_s.sub(/\.pkpass(es)?\z/, ""))
+    end
+
     def self.compress_passes_files(files)
       zip_path = TMP_FOLDER.join("#{SecureRandom.uuid}.pkpasses")
       zipped_file = File.open(zip_path, "w")

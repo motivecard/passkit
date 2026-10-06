@@ -12,10 +12,10 @@ module Passkit
               Passkit::Factory.create_pass(@payload[:pass_class], collection_item)
             end
             file = Passkit::Generator.compress_passes_files(files)
-            send_file(file, type: 'application/vnd.apple.pkpasses', disposition: 'attachment')
+            send_pass(file, "application/vnd.apple.pkpasses", also_delete: files)
           else
             file = Passkit::Factory.create_pass(@payload[:pass_class], @generator)
-            send_file(file, type: 'application/vnd.apple.pkpass', disposition: 'attachment')
+            send_pass(file, "application/vnd.apple.pkpass")
           end
         end
 
@@ -36,12 +36,20 @@ module Passkit
           end
 
           if stale?(last_modified: pass.last_update, etag: pass.cache_key_with_version)
-            pass_output_path = Passkit::Generator.new(pass).generate_and_sign
-            send_file(pass_output_path, type: "application/vnd.apple.pkpass", disposition: "attachment")
+            send_pass(Passkit::Generator.new(pass).generate_and_sign, "application/vnd.apple.pkpass")
           end
         end
 
         private
+
+        # send_file would stream the temp file after the action returns, so it could
+        # never be deleted: every request left a .pkpass and its build folder in
+        # tmp/passkit. The pass is ~1 MB, read it and delete it right away.
+        def send_pass(path, type, also_delete: [])
+          send_data File.binread(path), type: type, disposition: "attachment", filename: File.basename(path)
+        ensure
+          [path, *also_delete].each { |file| Passkit::Generator.cleanup(file) }
+        end
 
         def decrypt_payload
           @payload = Passkit::UrlEncrypt.decrypt(params[:payload])

@@ -33,7 +33,9 @@ module Passkit
       :private_p12_certificate,
       :apple_intermediate_certificate,
       :apple_team_identifier,
-      :pass_type_identifier
+      :pass_type_identifier,
+      :apns_pool_size,
+      :push_error_handler
 
     DEFAULT_AUTHENTICATION = proc do
       authenticate_or_request_with_http_basic("Passkit Dashboard. Login required") do |username, password|
@@ -54,6 +56,10 @@ module Passkit
       @apple_intermediate_certificate = ENV["PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE"] || (raise "Please set PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE")
       @apple_team_identifier = ENV["PASSKIT_APPLE_TEAM_IDENTIFIER"] || (raise "Please set PASSKIT_APPLE_TEAM_IDENTIFIER")
       @pass_type_identifier = ENV["PASSKIT_PASS_TYPE_IDENTIFIER"] || (raise "Please set PASSKIT_PASS_TYPE_IDENTIFIER")
+      # Persistent APNs connections per process; size it to the threads that push.
+      @apns_pool_size = 5
+      # Called with errors raised by an APNs socket (they happen outside the push call).
+      @push_error_handler = nil
     end
   end
 end
