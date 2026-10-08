@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.1].define(version: 2024_04_11_013721) do
+ActiveRecord::Schema[7.1].define(version: 2026_10_07_000000) do
   create_table "passkit_devices", force: :cascade do |t|
     t.string "identifier"
     t.string "push_token"
@@ -32,6 +32,7 @@ ActiveRecord::Schema[7.1].define(version: 2024_04_11_013721) do
     t.string "authentication_token"
     t.json "data"
     t.integer "version"
+    t.string "pass_type_identifier"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["generator_type", "generator_id"], name: "index_passkit_passes_on_generator"

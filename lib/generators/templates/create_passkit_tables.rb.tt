@@ -8,6 +8,7 @@ class CreatePasskitTables < ActiveRecord::Migration[<%= ActiveRecord::Migration.
       t.string :authentication_token
       t.json :data
       t.integer :version
+      t.string :pass_type_identifier
       t.timestamps null: false
       t.index [:generator_type, :generator_id], name: 'index_passkit_passes_on_generator'
     end

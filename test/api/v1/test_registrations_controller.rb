@@ -10,8 +10,8 @@ class TestRegistrationsController < ActionDispatch::IntegrationTest
   end
 
   def test_create
-    Passkit::Factory.create_pass(Passkit::ExampleStoreCard)
-    Passkit::Factory.create_pass(Passkit::ExampleStoreCard)
+    Passkit::Factory.create_pass(Passkit::UserStoreCard, User.create!(name: "One"))
+    Passkit::Factory.create_pass(Passkit::UserStoreCard, User.create!(name: "Two"))
     pass1 = Passkit::Pass.first
     pass2 = Passkit::Pass.last
 
@@ -49,6 +49,19 @@ class TestRegistrationsController < ActionDispatch::IntegrationTest
     assert_equal "2026-10-05T00:11:50.654321", JSON.parse(response.body)["lastUpdated"][0, 26]
   end
 
+  def test_show_lists_only_the_passes_of_the_requested_identifier
+    default_pass = create_registered_pass(updated_at: 1.minute.ago)
+    own_pass = create_registered_pass(updated_at: 1.minute.ago, pass_type_identifier: "pass.com.example.company")
+    legacy_pass = create_registered_pass(updated_at: 1.minute.ago)
+    legacy_pass.update_columns(pass_type_identifier: nil)
+
+    get device_registrations_path(device_id: "device-1", pass_type_id: "pass.com.example.company")
+    assert_equal [own_pass.serial_number], JSON.parse(response.body)["serialNumbers"]
+
+    get device_registrations_path(device_id: "device-1", pass_type_id: Passkit.configuration.pass_type_identifier)
+    assert_equal [default_pass.serial_number, legacy_pass.serial_number].sort, JSON.parse(response.body)["serialNumbers"].sort
+  end
+
   def test_destroy
     Passkit::Factory.create_pass(Passkit::ExampleStoreCard)
     pass = Passkit::Pass.first
@@ -62,10 +75,10 @@ class TestRegistrationsController < ActionDispatch::IntegrationTest
 
   private
 
-  def create_registered_pass(updated_at:)
+  def create_registered_pass(updated_at:, pass_type_identifier: Passkit.configuration.pass_type_identifier)
     pass = Passkit::Pass.create!(klass: "Passkit::ExampleStoreCard", serial_number: SecureRandom.uuid,
-      authentication_token: SecureRandom.hex)
-    device = Passkit::Device.create!(identifier: "device-1", push_token: "token")
+      authentication_token: SecureRandom.hex, pass_type_identifier: pass_type_identifier)
+    device = Passkit::Device.find_or_create_by!(identifier: "device-1") { |d| d.push_token = "token" }
     pass.registrations.create!(device: device)
     pass.update_columns(updated_at: updated_at)
     pass

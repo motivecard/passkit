@@ -2,7 +2,6 @@
 
 require "rails"
 require "passkit/engine"
-require "passkit/push_notification_service"
 
 require "zeitwerk"
 loader = Zeitwerk::Loader.for_gem
@@ -26,12 +25,19 @@ module Passkit
     yield(configuration) if block_given?
   end
 
+  # Signing material of a pass type identifier, from the app's resolver.
+  def self.signing_material_for(pass_type_identifier)
+    resolver = configuration.signing_material_resolver
+    raise Error, "Configure Passkit.configuration.signing_material_resolver" unless resolver
+
+    resolver.call(pass_type_identifier) ||
+      raise(Error, "No signing material for pass type identifier #{pass_type_identifier}")
+  end
+
   class Configuration
     attr_accessor :available_passes,
       :web_service_host,
-      :certificate_key,
-      :private_p12_certificate,
-      :apple_intermediate_certificate,
+      :signing_material_resolver,
       :apple_team_identifier,
       :pass_type_identifier,
       :apns_pool_size,
@@ -51,15 +57,18 @@ module Passkit
       @available_passes = {"Passkit::ExampleStoreCard" => -> {}}
       @web_service_host = ENV["PASSKIT_WEB_SERVICE_HOST"] || (raise "Please set PASSKIT_WEB_SERVICE_HOST")
       raise("PASSKIT_WEB_SERVICE_HOST must start with https://") unless @web_service_host.start_with?("https://")
-      @certificate_key = ENV["PASSKIT_CERTIFICATE_KEY"] || (raise "Please set PASSKIT_CERTIFICATE_KEY")
-      @private_p12_certificate = ENV["PASSKIT_PRIVATE_P12_CERTIFICATE"] || (raise "Please set PASSKIT_PRIVATE_P12_CERTIFICATE")
-      @apple_intermediate_certificate = ENV["PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE"] || (raise "Please set PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE")
+      # Callable that receives a pass type identifier and returns its Passkit::SigningMaterial.
+      # It signs the passes of that identifier and authenticates their APNs pushes.
+      @signing_material_resolver = nil
       @apple_team_identifier = ENV["PASSKIT_APPLE_TEAM_IDENTIFIER"] || (raise "Please set PASSKIT_APPLE_TEAM_IDENTIFIER")
       @pass_type_identifier = ENV["PASSKIT_PASS_TYPE_IDENTIFIER"] || (raise "Please set PASSKIT_PASS_TYPE_IDENTIFIER")
-      # Persistent APNs connections per process; size it to the threads that push.
+      # Persistent APNs connections per process and pass type identifier; size it to the
+      # threads that push.
       @apns_pool_size = 5
       # Called with errors raised by an APNs socket (they happen outside the push call).
       @push_error_handler = nil
     end
   end
 end
+
+require "passkit/push_notification_service"

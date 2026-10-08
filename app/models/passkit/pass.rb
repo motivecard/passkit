@@ -34,7 +34,6 @@ module Passkit
       :organization_name,
       :pass_path,
       :pass_type,
-      :pass_type_identifier,
       :primary_fields,
       :relevant_date,
       :secondary_fields,
@@ -60,6 +59,15 @@ module Passkit
 
     def last_update
       instance.last_update || updated_at
+    end
+
+    # A pass keeps the identifier it was issued with: passTypeIdentifier plus
+    # serialNumber is its identity in Wallet, so it is stored when the pass is created
+    # and wins over what the pass class would say today. Without the column (or before
+    # it is filled) the pass class decides.
+    def pass_type_identifier
+      (has_attribute?(:pass_type_identifier) && self[:pass_type_identifier].presence) ||
+        instance.pass_type_identifier
     end
   end
 end
