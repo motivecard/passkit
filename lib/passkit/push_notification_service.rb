@@ -1,78 +1,112 @@
-require 'apnotic'
+require "apnotic"
 
 module Passkit
+  # A push APNs answered with something other than 200, or never answered.
+  class PushError < Error
+    attr_reader :status, :reason, :pass_type_identifier
+
+    def initialize(status:, reason:, pass_type_identifier:)
+      @status = status
+      @reason = reason
+      @pass_type_identifier = pass_type_identifier
+      super("APNs #{status || "timeout"} #{reason} (#{pass_type_identifier})".squish)
+    end
+  end
+
   class PushNotificationService
     POOL_MUTEX = Mutex.new
+    # The push token no longer reaches the device (pass deleted, device wiped): Apple
+    # asks to stop pushing to it.
+    INVALID_TOKEN_REASONS = %w[BadDeviceToken Unregistered].freeze
 
     class << self
       def notify_pass_update(pass)
-        push_tokens = pass.devices.filter_map { |device| device.push_token.presence }
-        return if push_tokens.empty?
+        devices = pass.devices.select { |device| device.push_token.present? }
+        return if devices.empty?
 
-        connection_pool.with do |connection|
-          push_tokens.each do |push_token|
-            send_push_notification(connection, push_token, pass.pass_type_identifier)
+        pass_type_identifier = pass.pass_type_identifier
+        connection_pool(pass_type_identifier).with do |connection|
+          devices.each do |device|
+            send_push_notification(connection, device, pass_type_identifier)
           end
         end
       end
 
       # Apple recommends keeping APNs connections open instead of opening one per
-      # notification: a new HTTP/2 + TLS handshake with the pass certificate cost
-      # ~300 ms per push. The pool lives per process and is created lazily, so it
-      # is built after Puma forks. A dropped socket reconnects on the next push.
-      def connection_pool
-        @connection_pool || POOL_MUTEX.synchronize { @connection_pool ||= build_connection_pool }
+      # notification: a new HTTP/2 + TLS handshake cost ~300 ms per push. A pass
+      # pushes with a certificate of its own pass type identifier, so there is one
+      # pool per identifier, built lazily per process (after Puma forks). When the
+      # certificate of an identifier is renewed, its pool is replaced on the next push.
+      # A dropped socket reconnects on the next push.
+      def connection_pool(pass_type_identifier)
+        material = Passkit.signing_material_for(pass_type_identifier)
+        POOL_MUTEX.synchronize do
+          @pools ||= {}
+          fingerprint, pool = @pools[pass_type_identifier]
+          return pool if fingerprint == material.fingerprint
+
+          pool&.shutdown(&:close)
+          @pools[pass_type_identifier] = [material.fingerprint, build_connection_pool(material)]
+          @pools[pass_type_identifier].last
+        end
       end
 
-      # Closes the pooled connections, e.g. after rotating the certificate.
+      # Closes every pooled connection.
       def reset_connection_pool!
-        pool = POOL_MUTEX.synchronize { @connection_pool.tap { @connection_pool = nil } }
-        pool&.shutdown(&:close)
+        pools = POOL_MUTEX.synchronize { (@pools || {}).values.tap { @pools = {} } }
+        pools.each { |_fingerprint, pool| pool.shutdown(&:close) }
       end
 
       private
 
-      def build_connection_pool
+      def build_connection_pool(material)
         Apnotic::ConnectionPool.new(
-          {cert_path: Passkit.configuration.private_p12_certificate, cert_pass: Passkit.configuration.certificate_key},
+          {cert_path: StringIO.new(material.apns_pem)},
           {size: Passkit.configuration.apns_pool_size}
         ) do |connection|
           # Without a handler net-http2 raises socket errors in its own thread.
-          connection.on(:error) { |exception| handle_connection_error(exception) }
+          connection.on(:error) { |exception| report_error(exception) }
         end
       end
 
-      def handle_connection_error(exception)
-        Rails.logger.error "APNs connection error: #{exception.class}: #{exception.message}"
+      def report_error(exception)
+        Rails.logger.error "APNs: #{exception.class}: #{exception.message}"
         Passkit.configuration.push_error_handler&.call(exception)
       end
 
-      def send_push_notification(connection, push_token, pass_type_identifier)
-        notification = create_notification(push_token, pass_type_identifier)
-
-        response = connection.push(notification)
-
-        handle_response(response, push_token)
+      def send_push_notification(connection, device, pass_type_identifier)
+        response = connection.push(create_notification(device.push_token, pass_type_identifier))
+        handle_response(response, device, pass_type_identifier)
       end
 
       def create_notification(push_token, pass_type_identifier)
         notification = Apnotic::Notification.new(push_token)
         notification.topic = pass_type_identifier
-        notification.push_type = 'background'
+        notification.push_type = "background"
         notification.content_available = 1
         notification
       end
 
-      def handle_response(response, push_token)
-        if response
-          if response.status == '200'
-            Rails.logger.info "Push notification sent successfully to token: #{push_token}"
-          else
-            Rails.logger.error "Failed to send push notification to token: #{push_token}. Status: #{response.status}, Body: #{response.body}"
-          end
-        else
-          Rails.logger.error "Timeout sending push notification to token: #{push_token}"
+      def handle_response(response, device, pass_type_identifier)
+        if response&.status == "200"
+          Rails.logger.info "Push notification sent successfully to token: #{device.push_token}"
+          return
         end
+
+        reason = (response && response.body.is_a?(Hash)) ? response.body["reason"] : response&.body
+        if response && (response.status == "410" || INVALID_TOKEN_REASONS.include?(reason))
+          forget_device(device)
+        else
+          report_error(PushError.new(status: response&.status, reason: reason, pass_type_identifier: pass_type_identifier))
+        end
+      end
+
+      # The device unregistered its passes or no longer exists: Apple asks to stop
+      # pushing to its token. Its next registration creates it again.
+      def forget_device(device)
+        Rails.logger.info "APNs: forgetting device #{device.identifier}, its push token is no longer valid"
+        Passkit::Registration.where(passkit_device_id: device.id).delete_all
+        device.destroy
       end
     end
   end

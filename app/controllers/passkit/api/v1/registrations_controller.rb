@@ -68,10 +68,19 @@ module Passkit
 
         def fetch_registered_passes
           passes = @device.passes
+          passes = passes.where(passkit_passes: {pass_type_identifier: pass_type_identifiers}) if Pass.column_names.include?("pass_type_identifier")
           if params[:passesUpdatedSince].present?
             passes = passes.where('passkit_passes.updated_at > ?', Time.zone.parse(params[:passesUpdatedSince]))
           end
           passes
+        end
+
+        # A device asks per identifier. Passes created before the column existed have no
+        # value and carry the default identifier.
+        def pass_type_identifiers
+          identifiers = [params[:pass_type_id]]
+          identifiers << nil if params[:pass_type_id] == Passkit.configuration.pass_type_identifier
+          identifiers
         end
 
         # The tag comes back as passesUpdatedSince and is compared with `>`: truncated to

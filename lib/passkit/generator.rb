@@ -138,25 +138,12 @@ module Passkit
       File.write(@manifest_url, manifest.to_json)
     end
 
-    CERTIFICATE = Rails.root.join(ENV["PASSKIT_PRIVATE_P12_CERTIFICATE"])
-    INTERMEDIATE_CERTIFICATE = Rails.root.join(ENV["PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE"])
-    CERTIFICATE_PASSWORD = ENV["PASSKIT_CERTIFICATE_KEY"]
-
-    # :nocov:
     def sign_manifest
-      p12_certificate = OpenSSL::PKCS12.new(File.read(CERTIFICATE), CERTIFICATE_PASSWORD)
-      intermediate_certificate = OpenSSL::X509::Certificate.new(File.read(INTERMEDIATE_CERTIFICATE))
-
-      flag = OpenSSL::PKCS7::DETACHED | OpenSSL::PKCS7::BINARY
-      signed = OpenSSL::PKCS7.sign(p12_certificate.certificate,
-        p12_certificate.key, File.read(@manifest_url),
-        [intermediate_certificate], flag)
+      signed = Passkit.signing_material_for(@pass.pass_type_identifier).sign(File.read(@manifest_url))
 
       @signature_url = @temporary_path.join("signature")
       File.open(@signature_url, "w") { |f| f.syswrite signed.to_der }
     end
-
-    # :nocov:
 
     def compress_pass_file
       zip_path = TMP_FOLDER.join("#{@pass.file_name}.pkpass")

@@ -1,3 +1,10 @@
+## [0.8.0]
+- **Breaking:** signing material comes from `config.signing_material_resolver`, a callable that receives a pass type identifier and returns a `Passkit::SigningMaterial` (certificate, key and WWDR intermediate; `from_p12` or `from_pem`). `certificate_key`, `private_p12_certificate`, `apple_intermediate_certificate` and their `PASSKIT_*` variables are gone, and `Generator` no longer reads certificate files at load time.
+- Several pass type identifiers per app: `passkit_passes.pass_type_identifier` stores the identifier a pass was issued with (filled by `Factory.create_pass`, never overwritten) and wins over the pass class. Apps upgrading add the column themselves; without it everything keeps using the pass class. `RegistrationsController#show` lists only the passes of the requested identifier.
+- APNs: one connection pool per pass type identifier, authenticated with that identifier's certificate. A renewed certificate replaces its pool on the next push. A token APNs reports as gone (410, `BadDeviceToken`, `Unregistered`) removes the device and its registrations; other rejected pushes and timeouts reach `push_error_handler` as `Passkit::PushError`.
+- Removed `Factory.update_pass` and `PassUpdater`: passes are built on demand by `PassesController`, and updates only need a push.
+- `Factory.create_pass` accepts the pass class or its name.
+
 ## [0.7.2]
 - APNs: `PushNotificationService` keeps a per-process pool of persistent connections (`Apnotic::ConnectionPool`) instead of opening one per notification. New settings: `apns_pool_size` (default 5) and `push_error_handler` (called with socket errors). `reset_connection_pool!` closes them, e.g. after rotating the certificate.
 - `PassesController#show` and `#create` delete the generated `.pkpass` and its build folder after responding; they used to stay in `tmp/passkit` forever. New `Passkit::Generator.cleanup(path)`.

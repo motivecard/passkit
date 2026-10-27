@@ -8,11 +8,11 @@ In production, it will simply be your domain name, but in development you can us
 
 **Remember that it must always start with `https://`.**
 
-### `PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE`
+### Apple intermediate certificate
 
 This is the easy one.
 Head to https://www.apple.com/certificateauthority/ and download the latest Apple Intermediate Certificate Worldwide Developer Relations.
-You might want to choose the one with the longest expiration date. PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE is the path to the certificate.
+Use the one that issued your pass certificate (its Issuer). You pass it to `Passkit::SigningMaterial`.
 
 ### `PASSKIT_APPLE_TEAM_IDENTIFIER`
 
@@ -20,7 +20,7 @@ You find this in your Apple Developer dashboard, under Membership.
 
 ![Membership](membership.png)
 
-### `PASSKIT_PASS_TYPE_IDENTIFIER`, `PASSKIT_PRIVATE_P12_CERTIFICATE` and `PASSKIT_CERTIFICATE_KEY`
+### `PASSKIT_PASS_TYPE_IDENTIFIER` and the pass certificate
 
 Head to your Apple Developers console and generate a new certificate.
 
@@ -44,7 +44,8 @@ Open it in the Keychain Access tool and export it (you must be in the My Certifi
 
 ![Step 5](step5.png)
 
-Set a password and get your p12 file. The path to this file is the `PASSKIT_PRIVATE_P12_CERTIFICATE` variable.
-Save the password. This is the `PASSKIT_CERTIFICATE_KEY` variable.
+Set a password and get your p12 file. Build the signing material from it with
+`Passkit::SigningMaterial.from_p12(File.binread(path), password, intermediate_certificate: ...)`
+in `config.signing_material_resolver` (see the README).
 
 `PKCS12_parse: unsupported`: you might encounter this issue: https://help.heroku.com/88GYDTB2/how-do-i-configure-openssl-to-allow-the-use-of-legacy-cryptographic-algorithms

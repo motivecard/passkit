@@ -32,7 +32,9 @@ class TestPassesController < ActionDispatch::IntegrationTest
   end
 
   def test_create_collection
-    payload = Passkit::PayloadGenerator.encrypted(Passkit::UserTicket, User.find(1), :tickets)
+    user = User.create!(name: "Ticket holder")
+    2.times { |i| user.tickets.create!(name: "Ticket #{i}") }
+    payload = Passkit::PayloadGenerator.encrypted(Passkit::UserTicket, user, :tickets)
     get passes_api_path(payload)
     assert_response :success
     assert_equal 2, Passkit::Pass.count
@@ -40,6 +42,30 @@ class TestPassesController < ActionDispatch::IntegrationTest
     assert_equal 2, unzipped_passes.size # the main zip file contains two passes
     unzipped_pass =  Zip::File.open_buffer(unzipped_passes.first.zipfile)
     assert_includes unzipped_passes.first.name, '.pkpass'
+  end
+
+  def test_create_signs_the_manifest_with_the_material_of_the_pass_type_identifier
+    get passes_api_path(Passkit::PayloadGenerator.encrypted(Passkit::ExampleStoreCard))
+    assert_response :success
+    zip_file = Zip::File.open_buffer(StringIO.new(response.body))
+    signature = OpenSSL::PKCS7.new(zip_file.read("signature"))
+
+    store = OpenSSL::X509::Store.new
+    store.add_cert(TestSigningMaterial.root_certificate)
+    assert signature.verify([], store, zip_file.read("manifest.json"), OpenSSL::PKCS7::DETACHED | OpenSSL::PKCS7::BINARY)
+    material = TestSigningMaterial.for(Passkit::Pass.last.pass_type_identifier)
+    assert_equal material.certificate.to_der, signature.certificates.find { |c| c.subject == material.certificate.subject }.to_der
+  end
+
+  def test_create_stores_the_pass_type_identifier_the_pass_was_issued_with
+    Passkit::Factory.create_pass(Passkit::ExampleStoreCard)
+    pass = Passkit::Pass.last
+    assert_equal ENV["PASSKIT_PASS_TYPE_IDENTIFIER"], pass[:pass_type_identifier]
+
+    # An installed pass keeps its identifier even if the pass class changes its mind.
+    pass.update_columns(pass_type_identifier: "pass.com.example.old")
+    Passkit::Factory.create_pass(Passkit::ExampleStoreCard)
+    assert_equal "pass.com.example.old", pass.reload.pass_type_identifier
   end
 
   def test_show

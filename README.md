@@ -59,11 +59,27 @@ you the tables and ActiveRecord models, and also an engine with the necessary AP
 
 Now is your turn. Before proceeding, you need to set these ENV variables:
 * `PASSKIT_WEB_SERVICE_HOST`
-* `PASSKIT_CERTIFICATE_KEY`
-* `PASSKIT_PRIVATE_P12_CERTIFICATE`
-* `PASSKIT_APPLE_INTERMEDIATE_CERTIFICATE`
 * `PASSKIT_APPLE_TEAM_IDENTIFIER`
 * `PASSKIT_PASS_TYPE_IDENTIFIER`
+
+and tell Passkit where the certificate of each pass type identifier is. The same
+certificate signs the passes and authenticates their update pushes:
+
+```ruby
+Passkit.configure do |config|
+  config.signing_material_resolver = ->(pass_type_identifier) do
+    Passkit::SigningMaterial.from_p12(
+      File.binread("config/certs/pass.p12"), ENV["PASSKIT_CERTIFICATE_KEY"],
+      intermediate_certificate: File.read("config/certs/AppleWWDRCA.cer")
+    )
+  end
+end
+```
+
+`Passkit::SigningMaterial.from_pem(certificate:, key:, intermediate_certificate:)` works too,
+e.g. for certificates kept in the database. A pass stores the identifier it was issued
+with (`passkit_passes.pass_type_identifier`), so one app can issue passes under several
+identifiers.
 
 We have a [specific guide on how to get all these](docs/passkit_environment_variables.md), please follow it.
 You cannot start using this library without these variables set, and we cannot do the work for you.
