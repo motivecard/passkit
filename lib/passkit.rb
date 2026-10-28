@@ -41,6 +41,8 @@ module Passkit
       :apple_team_identifier,
       :pass_type_identifier,
       :apns_pool_size,
+      :apns_push_timeout,
+      :apns_idle_reconnect_after,
       :push_error_handler
 
     DEFAULT_AUTHENTICATION = proc do
@@ -65,7 +67,14 @@ module Passkit
       # Persistent APNs connections per process and pass type identifier; size it to the
       # threads that push.
       @apns_pool_size = 5
-      # Called with errors raised by an APNs socket (they happen outside the push call).
+      # Seconds to wait for APNs to answer a push before reconnecting and trying once
+      # more (net-http2 waits 60 by default).
+      @apns_push_timeout = 10
+      # Seconds a pooled connection may sit unused before it is reopened: an idle
+      # connection can be cut on the way without either end noticing. nil keeps it.
+      @apns_idle_reconnect_after = 240
+      # Called with errors raised by an APNs socket (they happen outside the push call)
+      # and with pushes APNs rejected for good (Passkit::PushError).
       @push_error_handler = nil
     end
   end
