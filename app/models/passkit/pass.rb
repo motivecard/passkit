@@ -4,7 +4,7 @@ module Passkit
     validates_presence_of :klass
 
     belongs_to :generator, polymorphic: true, optional: true
-    has_many :registrations, foreign_key: :passkit_pass_id
+    has_many :registrations, foreign_key: :passkit_pass_id, dependent: :delete_all
     has_many :devices, through: :registrations
 
     delegate :additional_pass_data,

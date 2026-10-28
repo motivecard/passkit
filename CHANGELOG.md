@@ -1,3 +1,9 @@
+## [0.9.0]
+- APNs: a push that gets no answer no longer waits 60 s and is lost. It waits `apns_push_timeout` (default 10 s), closes the connection (a connection left idle can be cut on the way without either end noticing, and stayed in the pool for minutes) and goes once more over a new one. A socket error does the same.
+- APNs: a pooled connection unused for `apns_idle_reconnect_after` seconds (default 240, nil to keep it) is reopened before the next push.
+- `notify_pass_update(pass, devices: nil)` returns the devices worth pushing again later (no answer after reconnecting, 429, 5xx) instead of reporting them, so the app can retry with backoff; `devices:` pushes only to those. Pushes APNs rejects for good still reach `push_error_handler` and gone tokens still remove the device.
+- Destroying a `Passkit::Pass` deletes its registrations.
+
 ## [0.8.0]
 - **Breaking:** signing material comes from `config.signing_material_resolver`, a callable that receives a pass type identifier and returns a `Passkit::SigningMaterial` (certificate, key and WWDR intermediate; `from_p12` or `from_pem`). `certificate_key`, `private_p12_certificate`, `apple_intermediate_certificate` and their `PASSKIT_*` variables are gone, and `Generator` no longer reads certificate files at load time.
 - Several pass type identifiers per app: `passkit_passes.pass_type_identifier` stores the identifier a pass was issued with (filled by `Factory.create_pass`, never overwritten) and wins over the pass class. Apps upgrading add the column themselves; without it everything keeps using the pass class. `RegistrationsController#show` lists only the passes of the requested identifier.

@@ -9,24 +9,33 @@ class TestPushNotificationService < ActiveSupport::TestCase
   FakeResponse = Struct.new(:status, :body)
 
   class FakeConnection
-    attr_reader :pushed, :error_handler, :options
+    attr_reader :pushed, :push_options, :closes, :error_handler, :options
 
+    # A response per token, or a list consumed in order: nil is a push nobody
+    # answered, an exception class is raised by the push.
     def initialize(options = {}, responses = {})
       @options = options
       @responses = responses
       @pushed = []
+      @push_options = []
+      @closes = 0
     end
 
     def on(event, &block)
       @error_handler = block if event == :error
     end
 
-    def push(notification)
+    def push(notification, push_options = {})
       @pushed << [notification.token, notification.topic]
-      @responses.fetch(notification.token) { FakeResponse.new("200", "") }
+      @push_options << push_options
+      response = @responses.fetch(notification.token) { FakeResponse.new("200", "") }
+      response = response.shift if response.is_a?(Array)
+      raise response, "socket" if response.is_a?(Class)
+      response
     end
 
     def close
+      @closes += 1
     end
   end
 
@@ -147,7 +156,118 @@ class TestPushNotificationService < ActiveSupport::TestCase
     refute Passkit::Device.exists?(identifier: "gone")
   end
 
+  def test_a_push_without_answer_reconnects_and_goes_again
+    connection = FakeConnection.new({}, {"a" => [nil, FakeResponse.new("200", "")]})
+    failed = nil
+    reported = with_error_handler do
+      Apnotic::Connection.stub(:new, ->(*) { connection }) do
+        failed = Passkit::PushNotificationService.notify_pass_update(pass_with("a"))
+      end
+    end
+
+    assert_empty failed
+    assert_empty reported
+    assert_equal %w[a a], connection.pushed.map(&:first)
+    assert_equal 1, connection.closes
+    assert_equal [10, 10], connection.push_options.map { |options| options[:timeout] }
+  end
+
+  def test_a_socket_error_reconnects_and_goes_again
+    connection = FakeConnection.new({}, {"a" => [Errno::ETIMEDOUT, FakeResponse.new("200", "")]})
+    failed = Apnotic::Connection.stub(:new, ->(*) { connection }) do
+      Passkit::PushNotificationService.notify_pass_update(pass_with("a"))
+    end
+
+    assert_empty failed
+    assert_equal 1, connection.closes
+  end
+
+  def test_returns_the_devices_still_unanswered_after_reconnecting
+    connection = FakeConnection.new({}, {"a" => [nil, nil]})
+    pass = pass_with("a", "b")
+    failed = nil
+    reported = with_error_handler do
+      Apnotic::Connection.stub(:new, ->(*) { connection }) do
+        failed = Passkit::PushNotificationService.notify_pass_update(pass)
+      end
+    end
+
+    assert_equal ["a"], failed.map(&:push_token)
+    assert_empty reported
+    assert_equal %w[a a b], connection.pushed.map(&:first)
+  end
+
+  def test_throttled_and_server_errors_are_returned_without_reporting
+    connection = FakeConnection.new({}, {"a" => FakeResponse.new("429", {"reason" => "TooManyRequests"}),
+                                         "b" => FakeResponse.new("503", {"reason" => "ServiceUnavailable"})})
+    failed = nil
+    reported = with_error_handler do
+      Apnotic::Connection.stub(:new, ->(*) { connection }) do
+        failed = Passkit::PushNotificationService.notify_pass_update(pass_with("a", "b"))
+      end
+    end
+
+    assert_equal %w[a b], failed.map(&:push_token)
+    assert_empty reported
+    assert_equal 0, connection.closes
+  end
+
+  def test_an_idle_connection_is_reopened_before_use
+    connection = FakeConnection.new
+    with_config(apns_idle_reconnect_after: 0) do
+      Apnotic::Connection.stub(:new, ->(*) { connection }) do
+        Passkit::PushNotificationService.notify_pass_update(pass_with("a"))
+        Passkit::PushNotificationService.notify_pass_update(pass_with("b"))
+      end
+    end
+
+    assert_equal 1, connection.closes
+    assert_equal %w[a b], connection.pushed.map(&:first)
+  end
+
+  def test_a_recently_used_connection_is_kept
+    connection = FakeConnection.new
+    Apnotic::Connection.stub(:new, ->(*) { connection }) do
+      Passkit::PushNotificationService.notify_pass_update(pass_with("a"))
+      Passkit::PushNotificationService.notify_pass_update(pass_with("b"))
+    end
+
+    assert_equal 0, connection.closes
+  end
+
+  def test_pushes_only_to_the_given_devices
+    pass = Passkit::Pass.create!(klass: "Passkit::ExampleStoreCard")
+    first = Passkit::Device.create!(identifier: "first", push_token: "first-token")
+    second = Passkit::Device.create!(identifier: "second", push_token: "second-token")
+    pass.registrations.create!(device: first)
+    pass.registrations.create!(device: second)
+    connection = FakeConnection.new
+
+    Apnotic::Connection.stub(:new, ->(*) { connection }) do
+      Passkit::PushNotificationService.notify_pass_update(pass, devices: [second])
+    end
+
+    assert_equal ["second-token"], connection.pushed.map(&:first)
+  end
+
+  def test_destroying_a_pass_deletes_its_registrations
+    pass = Passkit::Pass.create!(klass: "Passkit::ExampleStoreCard")
+    pass.registrations.create!(device: Passkit::Device.create!(identifier: "phone", push_token: "token"))
+
+    pass.destroy
+
+    assert_equal 0, Passkit::Registration.where(passkit_pass_id: pass.id).count
+  end
+
   private
+
+  def with_config(**settings)
+    previous = settings.keys.to_h { |key| [key, Passkit.configuration.public_send(key)] }
+    settings.each { |key, value| Passkit.configuration.public_send("#{key}=", value) }
+    yield
+  ensure
+    previous.each { |key, value| Passkit.configuration.public_send("#{key}=", value) }
+  end
 
   def with_error_handler
     reported = []
